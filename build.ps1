@@ -115,8 +115,11 @@ foreach ($ch in $chapters) {
         Write-Host "[skip] $ch （含 .build-skip 标记，需外部依赖，单独构建）" -ForegroundColor DarkYellow
         continue
     }
-    $sources += Get-ChildItem -Path $dir -Recurse -Filter *.cpp -File |
-                Where-Object { $_.FullName -notmatch '\\build\\' -and $_.FullName -notmatch '\\build-cmake\\' }
+    # 刻意只取本章目录「第一层」的 .cpp，不递归。
+    # 子目录 tests\ 里是 CMake/CTest 专用的多文件测试（实现与测试分离、没有 main），
+    # 用「一个 .cpp = 一个可执行文件」的方式编译必然失败（LNK1561 / LNK2019）。
+    # 它由 07-engineering/tests/CMakeLists.txt 配套构建，详见该文件。
+    $sources += Get-ChildItem -Path $dir -Filter *.cpp -File
 }
 
 if ($sources.Count -eq 0) { Write-Warning '没有找到任何 .cpp 源文件。'; exit 0 }
@@ -129,17 +132,22 @@ foreach ($src in $sources) {
     $exe     = Join-Path $outDir ($src.BaseName + '.exe')
 
     Write-Host ("[cl] $rel") -ForegroundColor Cyan
-    # /nologo 已在选项里；编译到目标目录，源码目录保持干净
-    $clOut  = & cl.exe @optList "/Fo$outDir\" "/Fe$exe" $src.FullName 2>&1
+    # /FS 是必须的：不加的话多个 cl.exe 同时写同一个 PDB 会报 fatal error C1041，
+    # 并行编译（多个终端同时验证 / 多核构建）时必然踩到。
+    # /Fd 把 PDB 放进 build 目录，免得它跑到仓库根目录里污染工作区。
+    $pdb    = Join-Path $outDir ($src.BaseName + '.pdb')
+    $clOut  = & cl.exe @optList "/FS" "/Fd$pdb" "/Fo$outDir\" "/Fe$exe" $src.FullName 2>&1
     $clCode = $LASTEXITCODE
 
-    # 把警告和错误都打出来（/W4 下警告正是我们想看到的）
-    $diag = @($clOut | Where-Object { $_ -match 'warning|error' })
+    # 把警告和错误都打出来（/W4 下警告正是我们想看到的）。
+    # 只匹配「诊断编号」形态（warning C4996 / error C2039），否则像
+    # "01_compiler_warnings_and_tools.cpp" 这种文件名回显会被误判成警告。
+    $diag = @($clOut | Where-Object { $_ -match '\b(?:warning|error)\s+[A-Z]+\d+' -or $_ -match 'fatal error' })
     foreach ($d in $diag) {
-        if ($d -match 'error') { Write-Host "    $d" -ForegroundColor Red }
-        else                   { Write-Host "    $d" -ForegroundColor Yellow }
+        if ($d -match '\berror\s+[A-Z]+\d+' -or $d -match 'fatal error') { Write-Host "    $d" -ForegroundColor Red }
+        else                                                             { Write-Host "    $d" -ForegroundColor Yellow }
     }
-    if ($diag.Count -gt 0 -and -not ($diag -match 'error')) { $warned += $rel }
+    if (@($diag | Where-Object { $_ -match '\bwarning\s+[A-Z]+\d+' }).Count -gt 0) { $warned += $rel }
 
     if ($clCode -ne 0) {
         Write-Host "    [FAIL] 编译失败: $rel" -ForegroundColor Red
