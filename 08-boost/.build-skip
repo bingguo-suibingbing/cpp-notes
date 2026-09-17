@@ -1,0 +1,13 @@
+此目录是一个独立的 Visual Studio 工程（Project6），依赖外部 Boost 库的头文件，
+因此不参与仓库根目录 build.ps1 的统一构建。
+
+原因：
+  1. 它需要 Boost 头文件（原配置指向 D:\boost\boost-1.92.0），换机器后路径不一定存在。
+  2. 它是一个多文件工程（main.cpp + src/*.cpp 共用一个 main），与「一个 .cpp = 一个可执行文件」
+     的统一构建体系不同。
+  3. Boost 头的编译非常慢，放进统一构建会显著拖慢日常验证。
+
+单独构建方法见 README_Boost_vs_STL.md。
+
+如果确实想让统一构建也编译这个目录（例如你已配好 Boost），删掉本文件后执行：
+    .\build.ps1 -Chapter 08-boost

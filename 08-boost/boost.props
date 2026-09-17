@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--
+    Boost 演示用属性表 (Property Sheet)
+    在 VS 里就是：右键项目 -> 属性 -> 配置属性 -> VC++ 目录 -> 包含目录
+    这里用属性表实现，好处是"加/删 Boost"只需要改这一个文件，
+    不用去动 vcxproj，也方便另外两个平台(Win32/x64)自动生效。
+    Boost 1.92 演示只用到 header-only 部分，因此不需要 lib 目录。
+  -->
+  <PropertyGroup Label="UserMacros">
+    <BoostRoot Condition="'$(BoostRoot)'==''">D:\boost\boost-1.92.0-b2-nodocs\boost-1.92.0</BoostRoot>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <IncludePath>$(BoostRoot);$(IncludePath)</IncludePath>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PreprocessorDefinitions>BOOST_ALL_NO_LIB;NOMINMAX;WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <DisableSpecificWarnings>4244;4267;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
+  <Target Name="BoostPropsCheck" BeforeTargets="ClCompile">
+    <Error Condition="!Exists('$(BoostRoot)\boost\version.hpp')"
+           Text="找不到 Boost 头文件: $(BoostRoot)\boost\version.hpp ，请修改 boost.props 里的 BoostRoot。" />
+  </Target>
+</Project>

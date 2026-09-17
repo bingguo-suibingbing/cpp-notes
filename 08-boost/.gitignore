@@ -1,0 +1,18 @@
+# 08-boost 的构建产物（它用自己的 VS 工程或 CMake 构建）
+build/
+build-cmake/
+out/
+x64/
+Debug/
+Release/
+.vs/
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.tlog
+*.log
+*.aps
+*.recipe
+*.lastbuildstate
+Project6.vcxproj.user

@@ -1,0 +1,684 @@
+﻿
+###############################################################################
+#                                                                             #
+#            Boost  vs  STL  —— 优缺点对照演示                                #
+#            (Visual Studio / MSVC, C++20, Boost 1.92)                        #
+#                                                                             #
+###############################################################################
+
+  这个演示把 Boost 和 STL 放在一起跑，逐主题给出  优点、缺点、以及"实际项目该选哪个"的结论。
+
+  说明：标 [Boost] 的行是用 Boost 实现的；标 [STL  ] 的行是用标准库实现的。        两边都出现在同一个主题里，方便你直接对比代码量和运行结果。
+
+  注意：性能相关的小节请用 Release|x64 配置运行，Debug 下数据没有意义。
+
+-------------------------------------------------------------------------------
+  请选择要演示的主题：
+
+    1. 字符串算法          boost::algorithm::string  vs  手写 STL      (Boost 赢)
+    2. 格式化 / 数字转换   boost::format / lexical_cast  vs  std::format (STL 赢)
+    3. 智能指针            intrusive_ptr / local_shared_ptr            (各有千秋)
+    4. 容器                multi_index / circular_buffer / bimap       (Boost 独有)
+    5. optional/variant    optional / variant2 / any                  (各有千秋)
+    6. JSON / 配置解析     property_tree                               (Boost 独有)
+    7. 正则 / 分词         boost::regex / tokenizer                    (Boost 赢)
+    8. 堆 / 容器补充       heap / flat_map / small_vector             (Boost 独有)
+    9. 错误处理 / 守卫     error_code 性能 / BOOST_SCOPE_EXIT          (各有千秋)
+   10. 日期时间            Date_Time  vs  std::chrono                  (各有千秋)
+   11. 总结               优缺点全景 + 决策指南 + 编译耗时实测
+
+    0 或直接回车 = 依次运行全部主题
+    q = 退出
+-------------------------------------------------------------------------------
+  你的选择: 
+  >>> 依次运行全部主题（内容较长，建议用 Ctrl+F5 并向上翻看）...
+  >>> 进入模块 m1_string ...
+
+===============================================================================
+  M1. 字符串算法：boost::algorithm vs 纯 STL
+===============================================================================
+
+--- 1) trim —— 去掉首尾空白 ---
+  [STL ] "Hello Boost"   <- 手写 8 行的 find_if + find_if_not
+  [Boost] "Hello Boost"   <- boost::algorithm::trim(buf) 一行，原地修改
+  [Boost] 还有 trim_left / trim_right / trim_copy / trim_copy_if(自定义谓词)
+
+--- 2) 大小写转换 ---
+  [STL ] "HELLO BOOST VS STANDARD LIBRARY"   <- std::transform + std::toupper
+  [Boost] "HELLO BOOST VS STANDARD LIBRARY"   <- boost::to_upper_copy(s)
+  [Boost] 注意: boost::to_upper() 会原地改 std::string，语义比 transform 更直白
+
+--- 3) 带谓词的 starts_with / ends_with / contains ---
+  [STL ] log.starts_with("ERROR") -> true   <- C++20 才有，且区分大小写
+  [STL ] 大小写不敏感的版本要自己写: true
+  [Boost] boost::istarts_with(log, "error") -> true   <- 直接给谓词版
+  [Boost] boost::contains(log, "disk") -> true   (STL 至今没有 contains，只能 find != npos)
+  [Boost] 还有 istarts_with / iends_with / istarts_with / contains + find_nth 等一堆
+
+--- 4) split —— 标准库里根本没有这个函数 ---
+  [STL ] 手写循环 -> 4 个字段: 
+  [     ] [id]
+  [     ] [name]
+  [     ] [score]
+  [     ] []
+  [Boost] boost::split(parts, s, boost::is_any_of(",")) -> 4 个字段
+  [Boost] 但注意: split 会把结尾的空字段丢掉，要保留得用 token_compress_off 变体
+  [Boost] 加 boost::token_compress_off -> 4 个字段（保留末尾空字段）
+  [Boost] 分隔符还能是谓词/字符集: is_any_of(",;") / is_space() / is_from_range('a','z')
+
+--- 5) 分割 + 拼接（join）一条龙 ---
+  [Boost] split 后共 5 段
+  [Boost] boost::algorithm::join(segs, " | ") -> C: | Users | Waj | Desktop | Project6
+  [STL ] join 也没有，要自己写循环控制分隔符位置（新手常在这里多打一个分隔符）
+
+--- 6) replace_all / erase_all —— 一行替换全部 ---
+  [Boost] replace_all(t, "-", "+") -> "a+b+c+d"
+  [Boost] erase_all(u, "-") -> "20240102"
+  [STL ] std::string::replace 只替换一次，replace_all 要自己写 while(find) 循环
+
+--- 7) 谓词: 判断整串是否符合规则 ---
+  [Boost] boost::all("abc", boost::is_lower())          -> true
+  [Boost] boost::all("aBc", boost::is_lower())          -> false
+  [Boost] boost::all("123", boost::is_digit())          -> true
+  [STL ] 对应写法: std::all_of(s.begin(), s.end(), ::islower) —— 长度差不多，但少了字符串语义
+
+小结(Boost 赢在): 字符串处理是 Boost 相对 STL 优势最明显的地方，
+  因为 STL 的 <string> 只有容器语义，没有文本处理语义。
+  缺点同样明显: <boost/algorithm/string.hpp> 展开后编译变慢、模板报错难读。
+  <<< 模块 m1_string 结束
+  >>> 进入模块 m2_format ...
+
+===============================================================================
+  M2. 格式化 / 转换：std::format 已经反超 boost::format
+===============================================================================
+
+--- 1) 同一个输出，三种写法对比 ---
+  [STL   ] user=Waj    id=0042 score=95.50
+  [Boost ] user=Waj    id=0042 score=95.50
+  [printf] user=Waj    id=0042 score=95.50
+
+--- 2) Boost.Format 少打一会儿字的场景（参数复用时优势） ---
+  [Boost] 王五 打 王五 的广告，成绩 88
+  [Boost] 位置参数 %1% 可以重复引用，不用把同一个变量传两遍
+  [STL  ] 王五 打 王五 的广告，成绩 88
+  [STL  ] std::format 用 {0} 索引也能重复引用，其实打平了
+
+--- 3) 编译期检查 —— std::format 的决定性优势 ---
+  [Boost] boost::format("%1% %2%") % 1;      <-- 参数个数不对
+          编译能过，运行到 str() 才抛 boost::io::too_few_args
+  [STL  ] std::format("{} {}", 1);          <-- 同样参数不够
+          MSVC 直接编译报错: 值不足以填充格式字符串
+          写错格式符 std::format("{:d}", "abc") 也是编译期报错，
+          而 boost::format / printf 都是运行期崩溃或乱码。
+
+  >>> 这是实测结论：把错误从运行期提前到编译期，是 std::format 最大价值。
+  [Boost] 运行期才抛异常: boost::too_few_args: format-string referred to more arguments than were passed
+  [STL  ] 同样的错误 std::format 在编译期就被 MSVC 拦住，程序根本发不出去
+
+--- 4) 性能对比：20 万次格式化 ---
+  [STL  ] std::format   : 73.7 ms
+  [STL  ] std::snprintf : 47.7 ms
+  [Boost] boost::format : 315.8 ms
+  ==> boost::format 比 std::format 慢 4.3 倍
+  (请用 Release x64 跑；Debug 下两者都被拖慢，但倍数关系一致)
+  原因: boost::format 每个 %N% 都要构造/销毁一个小对象并压栈，
+        std::format 是编译期把格式串拆成指令序列，直接写进结果缓冲。
+
+--- 5) 字符串 <-> 数字：lexical_cast vs std::from_chars / to_chars ---
+  [Boost] boost::lexical_cast<double>("3.14")      -> 3.140000
+  [STL  ] std::from_chars("3.14", ...)            -> 3.140000
+  [Boost] lexical_cast<int>("12abc") 抛异常: bad lexical cast: source type value could not be interpreted as target
+  [STL  ] std::from_chars 不抛异常，返回 error_code=ok，v=12，停在第 2 个字符
+  [STL  ]   --> 无异常、不分配内存，禁用异常/高并发的项目里更合适
+  [Boost]   --> lexical_cast 一行搞定且泛型更强（任何可流式输入的类型都能转），
+  [Boost]       还能直接 lexical_cast<std::string>(3.14) 转回来，from_chars 只做数值
+  [Boost] lexical_cast 往返 : 7.7 ms
+  [STL  ] to_chars/from_chars: 2.2 ms
+  ==> 数值转换 from_chars/to_chars 快 3.5 倍
+
+小结(Boost 输在): 这一块是 STL 反超的典型 —— C++17/20 之后，
+  格式化(std::format)、数值转换(from_chars/to_chars)、文件系统(std::filesystem)、
+  智能指针、optional/variant/any/string_view 全部进了标准库，
+  对应的 Boost 组件从必需品变成了兼容旧代码的历史包袱。
+  <<< 模块 m2_format 结束
+  >>> 进入模块 m3_smart_ptr ...
+
+===============================================================================
+  M3. 智能指针：shared_ptr 打平，intrusive_ptr 是 STL 的空白
+===============================================================================
+
+--- 1) 通用部分：Boost 是标准库的前身，现在直接用 std:: 就行 ---
+  [STL  ] std::make_shared   -> stl
+  [Boost] boost::make_shared  -> boost
+
+  std::unique_ptr / weak_ptr / enable_shared_from_this 都是从 Boost 搬过来的，
+  所以这一层谁更好没有悬念：用标准库，少一个第三方依赖。
+
+--- 2) 独立控制块 vs 内嵌引用计数（intrusive_ptr 的真正价值） ---
+  [STL  ] sizeof(std::shared_ptr<Session>)  = 16 字节（对象指针 + 控制块指针 = 2 个指针）
+  [Boost] sizeof(boost::intrusive_ptr<Session>) = 8 字节（只有对象指针）
+
+  [STL  ] shared_ptr 还要额外 new 一个控制块（原子计数 + 弱计数 + 删除器）：
+          [Session 对象] + [控制块]  = 两次堆分配，缓存局部性差
+  [Boost] intrusive_ptr 的引用计数就在 Session 里：
+          [Session{ name, atomic refcount }] = 一次堆分配
+  [Boost] 拷贝后 refcount = 2
+  [Boost] reset 后 refcount = 1
+
+  什么时候真的需要它？
+   - 对象已经有自己的引用计数（COM 的 AddRef/Release、老SDK、自研对象池）
+   - 需要让对象生命周期完全由对象自身决定，避免 shared_ptr 控制块脱管
+   - 海量小对象场景，想省掉控制块的分配和 16 字节开销
+  代价：必须自己保证 add_ref/release 正确（写错就是内存泄漏，没有 RAII 兜底）。
+
+--- 3) local_shared_ptr：非原子引用计数（单线程专用加速） ---
+  [Boost] boost::local_shared_ptr 引用计数用普通 int，不加锁不插内存屏障
+  [Boost] 对应 std::shared_ptr 一定是 atomic 计数 —— 单线程下纯属白付代价
+
+  [STL  ] std::shared_ptr       拷贝 2000000 次: 24.2 ms
+  [Boost] boost::local_shared_ptr 拷贝 2000000 次: 1.4 ms
+  ==> local_shared_ptr 快 16.92 倍（单线程场景）
+  危险提示：local_shared_ptr 跨线程共享会直接数据竞争，属于用错就炸的优化。
+
+--- 4) shared_array / aliasing（老代码里还能见到） ---
+  [Boost] boost::shared_array<int> 自动 delete[]，C++17 前 STL 没这个
+  [STL  ] C++17 起用 std::shared_ptr<int[]>(new int[4]{1,2,3,4})，现在不需要 Boost 了
+  [STL  ] aliasing 构造 std::shared_ptr<double>(owner, &owner->b) 也能做，打平
+
+小结: 通用智能指针 —— 打平，用标准的；
+      intrusive_ptr / local_shared_ptr —— Boost 独有，特定场景有真实收益。
+  <<< 模块 m3_smart_ptr 结束
+  >>> 进入模块 m4_container ...
+
+===============================================================================
+  M4. 容器：multi_index_container 是 STL 至今的空白
+===============================================================================
+
+--- 1) 用 STL 做同一份数据、多个键索引 —— 手写版有多脆 ---
+  [STL  ] 两份容器各存一份指针，已插入 3 条，按名字遍历: Li Wang Zhang 
+  [STL  ] 致命问题：Employee 的 key 一旦被改（比如改名），
+  [STL  ] by_name 集合里的顺序就悄悄失效了，编译器不会提醒你。
+  [STL  ] insert / erase / modify 每处都要记得同步两份容器 —— 迟早漏。
+
+--- 2) Boost.MultiIndex：一份存储，三个索引，改 key 由库帮你重排 ---
+  [Boost] 按 id 有序: 1:Li 2:Zhang 3:Wang 4:Zhao 
+  [Boost] 按 name 有序: Li Wang Zhang Zhao 
+  [Boost] 哈希索引 equal_range("RD") 直接命中 3 人，O(1) 定位
+  [Boost] modify 改名后，按 name 索引自动重排: AAA-Li Wang Zhang Zhao 
+  [Boost] modify() 会先摘出元素、改完再插回所有相关索引，绝不留下脏索引
+
+  这就是 multi_index_container 的价值：把多索引一致性从程序员的责任
+  变成容器的内部不变量。金融行情、游戏实体、缓存表都是它的主战场。
+
+--- 3) circular_buffer：定长环形队列（STL 没有） ---
+  [Boost] 容量 4，压入 1..6 后内容: 3 4 5 6  | size=4 full=true
+  [STL  ] 没有对应物：要自己用 std::vector + 取模下标 + 手写 push_back 覆盖逻辑，
+  [STL  ] 还要处理迭代器跨环形边界的遍历（新手在这里 100% 写出 bug）。
+  典型用途：日志滚动窗口、串口/网络接收缓冲、最近 N 次采样、游戏输入缓冲。
+
+--- 4) bimap：双向映射 ---
+  [Boost] 正向查 apple -> 苹果
+  [Boost] 反向查 缓存  -> cache
+  [STL  ] std::map<std::string,std::string> 只支持正向；反查要么线性扫，
+  [STL  ] 要么再维护一份 map<std::string,std::string> 并保证两边同步。
+  bimap 还能配 unordered_set_of / multiset_of / list_of，灵活度远超手写。
+
+--- 5) container::flat_map：连续内存的 map ---
+  [Boost] flat_map 构建 30000 条: 0.5 ms
+  [STL  ] std::map 构建 30000 条: 2.2 ms
+  ==> flat_map 构建快 4.2 倍（顺序插入时还能用 hinted insert 更快）
+  [Boost] flat_map 查找 x600000 次: 19.2 ms
+  [STL  ] std::map  查找 x600000 次: 29.4 ms
+  ==> flat_map 查找快 1.5 倍（连续内存 = 缓存友好）
+  代价：flat_map 插入/删除是 O(n)（要搬数组），元素很大或频繁增删时别用。
+  另外 flat_map 的迭代器在插入后会失效，而 std::map 的迭代器稳定 —— 这是硬取舍。
+
+小结(Boost 赢在): multi_index / circular_buffer / bimap / flat_map 这四样
+  STL 里一个都没有。要用，就只有 Boost 或者自己写（自己写基本都会踩坑）。
+  <<< 模块 m4_container 结束
+  >>> 进入模块 m5_optional_variant ...
+
+===============================================================================
+  M5. optional / variant / any：大部分打平，Variant2 有独家保证
+===============================================================================
+
+--- 1) optional：std::optional 已全面接管 ---
+  [Boost] boost::optional 默认构造 -> 空，用 b.value_or("默认") = 默认
+  [STL  ] std::optional 默认构造   -> 空，用 s.value_or("默认") = 默认
+  [Boost] 赋值后 *b = hello，b.get() 也行
+  [STL  ] 赋值后 *s = hello，s.value() 也行（空时抛 bad_optional_access）
+  [STL  ] 函数返回 std::optional<int>() 表示没找到，比返回 -1 / 出参干净
+
+  差异点（Boost 略多几个小工具）：
+   - boost::optional 支持 optional<T&>（引用可选），std::optional 不支持引用
+   - boost::optional 有 in_place / make_optional 更早提供，但 C++17 都补齐了
+   - std::optional 有 monadic 操作 or_else/and_then/transform (C++23)
+  结论：新代码用 std::optional，Boost 版本只是历史兼容。
+
+--- 2) variant：std::variant 的 valueless_by_exception（实测） ---
+  [STL  ] 先持有 int：index() = 1，valueless_by_exception() = false
+  [STL  ] 换类型时抛异常: BombCtor 构造抛异常
+  [STL  ] 抛异常之后：index() = 1，valueless_by_exception() = false
+  [STL  ] 原值还在：std::get<int>(sv) = 7
+  [STL  ] ==> MSVC 的实现是先构造新值、成功后才销毁旧值（强异常保证），
+  [STL  ]     所以在这个场景下没有出现 valueless，旧值被完整保留。
+
+  但是：valueless_by_exception() 这个 API 之所以存在，是因为标准允许这个状态，
+  而且它在别的实现/别的场景下确实会发生（这是委员会自己也承认的设计缺陷）。
+  一旦进入这个状态，index() 会变成 variant_npos，任何 std::get 都抛
+  bad_variant_access —— 调用方每个 get 之前都得先判 valueless_by_exception()。
+  实测结论（MSVC v145 STL）：本演示尝试了 5 种触发写法，均未进入 valueless，
+  Microsoft 的实现全程使用强异常保证。换 libstdc++/libc++ 就可能观察到该状态。
+  所以这是标准承诺很弱、某个实现恰好做得好的典型例子。
+
+--- 3) boost::variant2：never-valueless 是设计保证，不是实现运气 ---
+  [Boost] 同样先持有 int：index() = 1
+  [Boost] 同样抛异常: BombCtor 构造抛异常
+  [Boost] 抛异常之后：index() = 1，原值仍在：get<int>(bv) = 7
+
+  [Boost] 关键区别：variant2 的类型里根本没有 valueless_by_exception() 这个函数
+  它不是实现得好所以没出现，而是设计上就不允许存在这个状态：
+  要么把旧值原封不动留下，要么成功换成新值，不存在第三态。
+
+  这就是 Variant2 相对 std::variant 的真实优势：
+   std::variant 的调用方必须防御性地判 valueless（因为标准允许）；
+   Variant2 让 variant 一定有值成为类型层面的不变量，调用方可以放心 get。
+  [Boost] variant2 还自带 visit / get / holds_alternative，用法和 std::variant 基本一致
+
+--- 4) any：打平，用标准的 ---
+  [STL  ] std::any_cast<std::string>(sa)   -> stl-any
+  [Boost] boost::any_cast<std::string>(ba) -> boost-any
+  两者语义相同（类型擦除的值容器），std::any 是标准，没理由再引 Boost。
+
+--- 5) 实用组合：用 variant 做无异常的 返回值+错误 ---
+  [Boost] "123" -> 成功 123
+  [Boost] "abc" -> 失败 not a number: abc
+  [Boost] "" -> 失败 empty input
+  这种 expected/Result 风格在 C++23 之前要么用 Boost.Outcome，
+  要么就像上面这样用 variant 自己搭（C++23 才有 std::expected）。
+
+小结: optional/any —— 打平，用标准库；
+      Variant2 的 never-valueless —— Boost 确有独到设计。
+  <<< 模块 m5_optional_variant 结束
+  >>> 进入模块 m6_json ...
+
+===============================================================================
+  M6. JSON / 配置解析：STL 完全没有的领域
+===============================================================================
+
+--- 1) 现成的 JSON 文本（假装是从服务器/配置文件读来的） ---
+  [Boost] pt::read_json(is, tree) —— 只要 2 行就解析完了，不依赖任何第三方库
+
+--- 2) 用点号路径取值，并自带默认值 ---
+  [Boost] server.host          = 127.0.0.1
+  [Boost] server.port          = 8080
+  [Boost] timeout_ms           = 3000
+  [Boost] server.ssl.enabled   = 0  (缺字段，用默认值 0)
+  [Boost] a.b.c.d.e            = (路径不存在)
+  >>> 用点号路径 + 默认值，是 property_tree 写配置文件最省事的地方，
+      比手写 if(json.contains("server")) 一路判空要短得多。
+
+--- 3) 数组的遍历方式（注意：把数组当子节点集合看） ---
+  [Boost] 数组元素没有名字，key 是空串 ""，用 get_child + 遍历:
+  [     ] [0] key=""  value=prod
+  [     ] [1] key=""  value=cn-north
+  [     ] [2] key=""  value=v2
+  这是 property_tree 最反直觉的设计：JSON 数组被当成 key 为空的子节点列表，
+  property_tree 本身不区分数组和对象，所以类型信息会丢失（见下一条）。
+
+--- 4) property_tree 的硬伤：类型信息丢失 / 错误信息差 ---
+  [Boost] {"port": 8080}   -> get<int> = 8080
+  [Boost] {"port": "8080"} -> get<int> = 8080
+  [Boost] 两者取出来一模一样 —— 数字/字符串的区别在解析时就没了，
+  [Boost] 强类型 JSON 场景（比如要区分 "1" 和 1）就不够用。
+  [Boost] get<int> 失败: conversion of data to type "int" failed
+  报错只告诉类型转换失败，不给行列号、不给 JSON 路径 —— 排查大配置文件很痛苦。
+  [Boost] 语法错误: <unspecified file>(1): expected key string
+  [STL  ] 标准库在这一领域是彻底空白 —— 你只能自己写或者引第三方。
+
+--- 5) 写 JSON（序列化） ---
+  [Boost] pt::write_json 输出（注意 tags 是数组）:
+      {
+          "name": "Project6",
+          "version": "1.0.3",
+          "debug": "false",
+          "compiler": "MSVC v145",
+          "tags": [
+              "boost",
+              "stl",
+              "demo"
+          ]
+      }
+
+--- 6) 那 std:: 这边怎么办？—— 标准库的答案是什么都没有 ---
+  C++17/20/23 标准库里的选择：
+   - 手写解析器        : 有 bug 风险、不支持转义/嵌套/Unicode
+   - 引 nlohmann/json  : 最好用的第三方，但又是一份新的依赖
+   - 引 rapidjson      : 性能最好
+   - 用 Boost.JSON     : 已经在你手里，不用再引新依赖
+
+  所以 M6 这一块就是 Boost 存在的核心理由：
+  标准库没有的能力，Boost 用一个统一的依赖帮你覆盖掉。
+
+小结(Boost 赢在): JSON/XML/INI 解析 —— STL 完全空白，Boost 直接补上；
+  但优先用 boost::json（强类型、报错好），property_tree 只在图省事时用。
+  缺点: property_tree 类型信息弱、报错差、性能一般（这也是它被 boost::json 取代的原因）。
+  <<< 模块 m6_json 结束
+  >>> 进入模块 m7_regex_tokenizer ...
+
+===============================================================================
+  M7. 正则 / 分词：boost::regex 比 std::regex 更快也更全
+===============================================================================
+
+--- 1) 同样的捕获，两边写法几乎一样 ---
+  [Boost] regex_match 捕获组: 日期=2026-03-14 级别=ERROR 用户=alice 码=5003
+  [STL  ] regex_match 捕获组: 日期=2026-03-14 级别=ERROR 用户=alice 码=5003
+  这一层两者打平（C++11 的 std::regex 就是从 Boost.Regex 来的）。
+
+--- 2) 性能：这才是差距所在 ---
+  [STL  ] std::regex   匹配 40000 行: 8.6 ms  命中 20000
+  [Boost] boost::regex 匹配 40000 行: 5.7 ms  命中 20000
+  ==> boost::regex 快 1.5 倍
+  (Release 下跑；std::regex 慢主要来自 MSVC/libstdc++ 的回溯式实现)
+  提示: 真实项目里固定模式应该把 regex 对象构造一次、复用，而不是每次重建；
+        即使那样优化，boost::regex 在多数模式上仍然更快。
+
+--- 3) boost::regex 能写、std::regex 写不了的语法 ---
+  [Boost] (?<=price: ) 后行断言 -> 1980   <-- std::regex 会抛 regex_error
+  [Boost] \d+\s+\K\w+ -> CNY
+  [Boost] 命名捕获 amount=1980 cur=CNY
+  [STL  ] std::regex 直接抛 regex_error: regex_error(error_badrepeat): One of *?+{ was not preceded by a valid regular expression.
+
+--- 4) 替换：两边都有，Boost 多了 format 语法 ---
+  [Boost] boost::regex_replace(s, re, "$1") 支持 $1 / $& / (?1) 等
+  [Boost] 结果: alice:100; bob:200; carol:300
+  [Boost] format_all 结果: ["100|alice"]; ["200|bob"]; ["300|carol"]
+  [STL  ] std::regex_replace 结果: alice:100; bob:200; carol:300   (打平)
+
+--- 5) boost::tokenizer：惰性分词，还懂引号 ---
+  [Boost] 按逗号分词 (3 个): [apple] [banana] [cherry] 
+  [Boost] 注意：空字段保留为空串；而 boost::algorithm::split 会丢掉尾部的空字段
+  [Boost] 差异点：tokenizer 不需要先构造 vector<string>，是惰性迭代 + 零拷贝 string 视图
+  [Boost] escaped_list_separator 解析带引号的 CSV: [name] [Li, Wei] [Beijing, CN] [42] 
+
+  >>> 这个例子最能说明 Boost 的价值：
+      用 STL 手写带引号的 CSV 解析要处理状态机（引号内逗号不算分隔符、转义引号 …），
+      而 Boost 给你 escaped_list_separator，一行搞定。
+
+小结(Boost 赢在): 正则性能 + PCRE 级特性、以及 tokenizer 的惰性分词；
+  缺点: boost::regex 是编译库（要链接 boost_regex），而 std::regex 开箱即用无依赖。
+  <<< 模块 m7_regex_tokenizer 结束
+  >>> 进入模块 m8_heap_flatmap ...
+
+===============================================================================
+  M8. 堆与容器补充：STL 没有的增量能力
+===============================================================================
+
+--- 1) boost::heap 的可合并堆 vs std::priority_queue ---
+  [STL  ] std::priority_queue push 200000 次: 3.1 ms
+  [Boost] binomial_heap       push 200000 次: 7.0 ms
+  [STL  ] std::priority_queue 全弹出: 8.4 ms
+  [Boost] binomial_heap       全弹出: 180.4 ms
+
+  注意：单纯 push/pop，std::priority_queue 通常更快（连续内存 + 简单下沉）。
+  boost::heap 的价值不在速度，而在 STL 根本没有的能力 —— 见下一条。
+
+--- 2) merge：把两个堆 O(log n) 合并（std::priority_queue 做不到） ---
+  [Boost] 合并前 h1.top() = 13，h2.top() = 14
+  [Boost] merge 后 h1.top() = 14，h1.size() = 8，h2 已被搬空 size=0
+  [STL  ] std::priority_queue 连 .begin()/.end() 都没有，merge 只能：
+  [STL  ]   ① 把两个堆全部弹出到 vector（O(n log n) 排序）再重建 —— 慢且费内存；
+  [STL  ]   ② 或者自己手写可合并堆。
+
+  典型用途：多路归并、Dijkstra/A* 的优先队列、任务调度合并队列、
+            k 个有序流的合并（日志合并、外部排序）。
+
+--- 3) 修改堆中已有元素的键值（优先级队列的改键） ---
+  [Boost] 初始 top = 40
+  [Boost] update(handle, 99) 后 top = 99
+  [Boost] fibonacci_heap 还支持 increase/decrease（Dijkstra 里改距离必需）
+  [STL  ] std::priority_queue 没有句柄/迭代器概念，改键只能 push 一个新值
+  [STL  ]   然后靠懒删除（弹出时判断是否过期）绕过 —— 内存会膨胀。
+
+--- 4) flat_map vs std::map：小数据量下差距明显 ---
+  [Boost] flat_map         2000 次插入+查找: 0.2 ms
+  [STL  ] std::map         2000 次插入+查找: 0.2 ms
+  [STL  ] std::unordered_map 2000 次插入+查找: 0.1 ms
+  ==> flat_map 相对 std::map 快 1.0 倍
+  原理：flat_map 是排序的 vector，查找虽为 O(log n) 但全程连续内存、
+        缓存命中率高，常数因子比红黑树小得多。
+  代价：插入/删除 O(n)（搬元素），且插入会让迭代器全部失效。
+
+--- 5) small_vector：栈上小缓冲，避免小数组的堆分配 ---
+  [Boost] small_vector<int, 8> sizeof = 56 字节（内含 8 个 int 的栈缓冲 = 32 字节）
+  [Boost] 存 6 个元素：完全没有堆分配（size=6）
+  [Boost] 超过 8 个后自动转堆分配（size=20，capacity=30）
+  [STL  ] std::vector 无论多小都一定堆分配；小对象高频创建时这是明显开销。
+  用途：函数返回的小集合、每帧构造的临时列表、解析器里的 token 缓冲。
+
+小结(Boost 赢在): 可合并堆 / 改键堆 / flat_map / small_vector —— 
+  这些都不是替代 STL，而是 STL 没覆盖到的数据结构空白。
+  <<< 模块 m8_heap_flatmap 结束
+  >>> 进入模块 m9_error_scope ...
+
+===============================================================================
+  M9. 错误处理 / 作用域守卫：一半打平，scope_exit 是 STL 空白
+===============================================================================
+
+--- 1) error_code：两种库的写法对照 ---
+  [STL  ] std::error_code          : value=2 category=app message=权限不足
+  [Boost] boost::system::error_code: value=2 category=app message=权限不足
+  [STL  ] 成功时 std::error_code 转 bool 为 false: false(没有错误)
+
+  结论：std::error_code 就是 Boost 版搬进标准库的，新代码用 std:: 即可。
+
+--- 2) 异常 vs 错误码：性能差距（异常不是免费的） ---
+  [STL  ] 成功路径 抛异常风格  x200000: 0.7 ms
+  [STL  ] 成功路径 error_code   x200000: 0.6 ms
+  成功路径上两者接近（异常只要不抛就没有栈展开开销）。
+
+  [STL  ] 失败路径 抛异常风格  x200000: 364.1 ms
+  [STL  ] 失败路径 error_code   x200000: 0.5 ms
+  ==> 高频失败场景下，异常比 error_code 慢 681 倍
+  注意看绝对值：每次抛异常大约 1~2 微秒。如果失败是罕见事件（比如 100 万次调用
+  才失败一次），这点开销完全可以忽略，用异常的代码更清爽。
+  只有失败率高（解析用户输入、探测性调用、网络重试）时，这个倍数才会变成真问题。
+  所以：错误是常态的接口（解析、探测、网络重试）应该返回 error_code；
+        错误是异常情况的接口（构造函数、不可恢复错误）才用异常。
+
+--- 3) boost::system::result<T>：C++23 std::expected 的先行版 ---
+  [Boost] "8080" -> 值 8080
+  [Boost] "99999" -> 错误 权限不足
+  [Boost] "abc" -> 错误 磁盘已满
+  std::expected 要 C++23 才有，且部分标准库实现还不完整；
+  Boost.System 的 result<T> 在 C++11 起就能用，语义基本一致（还有 result<T&> 等扩展）。
+
+--- 4) BOOST_SCOPE_EXIT：逆序清理（STL 完全没有） ---
+  [Boost] trace: enter
+  [Boost] trace: body
+  [Boost] trace: cleanup#2
+  [Boost] trace: cleanup#1 (最后声明 -> 最先执行)
+
+  对比 STL 的替代方案：
+   1) 手写 RAII 类：正确但啰嗦（每种清理都要一个类）；
+   2) try/catch 包一层：容易漏、还可能吞掉异常；
+   3) std::unique_ptr + 自定义删除器：只适合释放资源这一种形态。
+  BOOST_SCOPE_EXIT 把离开作用域时执行的清理变成一行声明，
+  并且天然满足逆序清理（后申请的先释放）这个正确性要求。
+
+小结: error_code 用标准的，性能取舍上面已经量化；
+      BOOST_SCOPE_EXIT / result<T> 是 STL 至今没有或才刚有的东西。
+  <<< 模块 m9_error_scope 结束
+  >>> 进入模块 m10_datetime ...
+
+===============================================================================
+  M10. 日期时间：chrono 接手了日期表示，但没接手全部
+===============================================================================
+
+--- 1) 同一个日期，两边怎么表示 ---
+  [Boost] bg::date(2026, Mar, 14)  -> 2026-Mar-14   等价 ISO 写法: 2026-03-14
+  [STL  ] year{2026}/March/14      -> 2026-03-14   (chrono::year_month_day)
+
+  两边都能表达日历日期，但运算和格式化的便利性差很多 —— 往下看。
+
+--- 2) 日期运算：Boost 明显更好用 ---
+  [Boost] 起点: 2026-Jan-31
+  [Boost] d + months(1)          = 2026-Feb-28   <-- 1/31 加 1 个月自动裁到 2 月末
+  [Boost] d + days(1)            = 2026-Feb-01
+  [Boost] d.end_of_month()       = 2026-Jan-31
+  [Boost] day_of_week()=6(0=周日)  day_of_year()=31
+  [Boost] 下一个工作日(跳过周末) = 2026-Feb-02
+  [Boost] is_leap_year(2024) = true
+  [Boost] 两个日期相减 -> 364 天
+
+  [STL  ] 起点: 2026-01-31
+  [STL  ] year_month_day{2026年2月, day{31}} -> ok()==false（2月31日非法）
+  [STL  ] 手动裁剪后 -> 2026-02-28   <-- 要 year_month_day_last 绕一圈，Boost 一行搞定
+  [STL  ] weekday 名字要自己查表: 周六   (Boost: d.day_of_week() 直接用)
+
+--- 3) 字符串 <-> 日期：解析与格式化 ---
+  [Boost] bg::from_simple_string("2026-03-14") -> 2026-Mar-14
+  [Boost] bg::to_iso_extended_string(bd)         -> 2026-03-14
+  [Boost] 还有 from_undelimited_string / 以及 operator>> 流式解析
+  [STL  ] std::chrono 里没有从字符串解析日期的入口
+  [STL  ]   手写 sscanf(y,m,d) 会丢掉日历校验（2月30日也能解析出来）
+  [STL  ]   std::get_time 只能填 std::tm，没有日历语义
+  [STL  ]   C++20 有格式化路径（std::format + chrono），但解析支持较新且不完整
+
+  >>> 只要涉及"把用户输入的日期读进来"，Boost.Date_Time 目前仍然最省事。
+
+--- 4) 时间点 / 时长 / 计时：这里 STL 完胜 ---
+  [STL  ] steady_clock 测出一段循环耗时: 624 微秒
+  [STL  ] duration<double, milli> / duration_cast 编译期检查单位，不会算错量级
+  [STL  ] C++20 还有 system_clock 与 tzdb 时区支持（zoned_time）
+  [Boost] Boost.Chrono 是 C++11 之前的标准库替代品 —— 现在没有任何理由再用它
+  结论：计时/时长/时间点/时区 -> 一律 std::chrono。
+
+小结(各有所长):
+  Boost.Date_Time 赢在业务化日期运算（加月裁剪、月末、工作日）和现成的解析/格式化；
+  std::chrono      赢在时间点/时长/时区、类型安全、零依赖。
+  推荐：日期业务逻辑多 -> 可用 Boost.Date_Time；纯计时/时长 -> 一律 std::chrono。
+  <<< 模块 m10_datetime 结束
+  >>> 进入模块 m11_summary ...
+
+===============================================================================
+  M11. 总结：Boost 相对 STL 的优缺点全景
+===============================================================================
+
+--- A. 逐主题结论表 ---
+  主题                        Boost 方案                 STL 方案               结论
+  ------------------------------------------------------------------------------------------------------------------------
+  字符串算法         Boost: algorithm::string      STL: 无(要手写)     -> Boost 明显更强
+  字符串格式化      Boost: boost::format          STL: std::format(C++20) -> STL 更好(编译期检查)
+  字符串<->数字      Boost: lexical_cast           STL: from/to_chars(C++17) -> STL 更快, Boost 更泛型
+  智能指针(通用)    Boost: shared/unique_ptr      STL: std:: 同名版本 -> 打平, 用标准的
+  intrusive_ptr           Boost: 有                    STL: 无                -> Boost 独有
+  local_shared_ptr        Boost: 有(非原子计数)   STL: 无                -> Boost 独有
+  multi_index             Boost: multi_index_container  STL: 无                -> Boost 独有(无替代)
+  环形缓冲            Boost: circular_buffer        STL: 无                -> Boost 独有
+  双向映射            Boost: bimap                  STL: 无                -> Boost 独有
+  flat_map                Boost: container::flat_map    STL: 无(C++23 flat_map) -> Boost 先行
+  small_vector            Boost: container::small_vector STL: 无                -> Boost 独有
+  可合并堆            Boost: heap::*_heap           STL: 只有 priority_queue -> Boost 独有
+  optional                Boost: boost::optional        STL: std::optional(C++17) -> 打平, 用标准的
+  variant                 Boost: variant2(never-valueless) STL: std::variant       -> 各有千秋
+  any                     Boost: boost::any             STL: std::any(C++17)    -> 打平, 用标准的
+  JSON/XML/INI            Boost: property_tree / json   STL: 无                -> Boost 独有
+  正则                  Boost: boost::regex           STL: std::regex(C++11)  -> Boost 更快更全
+  分词                  Boost: tokenizer              STL: 无                -> Boost 独有
+  文件系统            Boost: filesystem             STL: std::filesystem    -> 打平, 用标准的
+  日期时间            Boost: date_time              STL: chrono(C++20)      -> 各有千秋
+  作用域守卫         Boost: BOOST_SCOPE_EXIT       STL: 无                -> Boost 独有
+  错误码               Boost: system::error_code     STL: std::error_code    -> 打平, 用标准的
+  result<T>               Boost: system::result         STL: std::expected(C++23) -> Boost 先行
+
+--- B. Boost 的优点（实测/客观） ---
+  1. 补标准库的空白：multi_index / circular_buffer / bimap / 可合并堆 /
+     JSON 解析 / scope_exit —— 这些 STL 到今天都没有，自己写基本都会踩坑。
+  2. 一个依赖换一大堆能力：引一次 Boost，就有 160+ 个库可用，
+     不用为每个需求单独挑一个第三方库（也就少了一堆许可证和版本冲突）。
+  3. 标准的试验田：shared_ptr / regex / filesystem / optional / variant / any /
+     thread / chrono 全是先在 Boost 里跑通、再进标准的 —— 用 Boost 常常等于
+     "提前用上两三年后的标准库"。
+  4. 跨平台一致性：同一份代码在 MSVC/GCC/Clang 上行为一致，
+     不像各标准库实现的边角行为有差异（std::regex 尤其明显）。
+  5. 成熟度：很多组件在金融/游戏/通信里跑了 20 年，边界条件被踩遍了。
+
+--- C. Boost 的缺点（也是实测/客观） ---
+  1. 编译时间爆炸：纯头文件的模板展开极重。
+     实测（本机 MSVC v145 / /O2 / Release x64，各编译 3 次取平均）：
+       bench\compile_bench_std.cpp   (只用 STL 实现 11 个功能) : 2641 ms
+       bench\compile_bench_boost.cpp (同一批功能改用 Boost)   : 4768 ms
+       ==> Boost 版编译耗时是 STL 版的 1.81 倍
+     两个文件逐行对应（见 bench\ 目录），可以自己复现：
+       cl /c /O2 /std:c++20 /utf-8 /I bench /I <BoostRoot> bench\compile_bench_boost.cpp
+     本演示工程 12 个 cpp 完整重编译一次约 38 秒（/m:1 单进程）。
+  2. 依赖与体积：完整 Boost 源码几百 MB；虽然大多 header-only，
+     但 regex / filesystem / thread / iostreams 等仍是编译库，要构建+链接。
+  3. 学习曲线与文档：模板报错动辄几十屏（类型名全部展开），
+     新手看到 boost::multi_index_container<...> 的模板参数就劝退。
+  4. 历史包袱 / 已被标准库取代的组件：format、lexical_cast、shared_ptr、
+     optional、variant(非2)、any、chrono、filesystem …
+     继续用它们只会让团队同时维护两套风格。
+  5. 版本升级风险：Boost 不保证跨版本 API 兼容，
+     升级一次可能大面积改代码（Boost 1.92 已移除不少废弃接口）。
+  6. ABI 面：混用 Debug/Release 或不同编译器版本的 Boost 库会直接崩，
+     二进制分发场景比标准库麻烦。
+  7. 没有"标准"约束：API 由社区决定，可能出现设计不一致；
+     标准库至少有个委员会 + 正式规范。
+
+--- D. 决策指南（实际项目怎么做） ---
+  默认策略：先看 C++ 标准库有没有 —— 有就用标准的。
+
+  只在下列情况引入 Boost：
+   [1] 标准库确实没有：容器多样性(multi_index/flat_map)、
+       JSON/INI/XML、正则性能、Asio 网络、可合并堆、Graph 算法。
+   [2] 需要跨平台且不想引多个第三方库；
+   [3] 项目已经在用 Boost，为了风格统一继续用同一套（比如 Asio）。
+
+  明确不要用 Boost 的地方：
+   [x] shared_ptr / unique_ptr / optional / variant / any / thread / chrono /
+       filesystem / regex(若性能不敏感) —— 标准库版本已经够好且无依赖；
+   [x] 只需要一两个小工具（比如只想要 trim）就引整个 Boost 不划算，
+       考虑自己写十几行或用更小的库。
+
+  VS 工程实践建议：
+   - 用 vcpkg / NuGet 管 Boost，别手工复制头文件到工程里；
+   - 把 Boost 包含目录放进独立属性表（本工程的 boost.props），
+     这样"是否使用 Boost"是一个开关，而不是散落在各处的配置；
+   - 预先编译头文件(PCH) + /MP 多核编译，能显著缓解编译慢的问题；
+   - 只链接用到的编译库（BOOST_ALL_NO_LIB 关掉自动链接，手动指定，
+     依赖更清晰）；
+   - 团队里写进编码规范："标准库优先，Boost 需在评审时说明理由"。
+
+--- E. 一句话总结 ---
+   Boost 是"标准库的扩展包 + 试验田"，不是"标准库的替代品"。
+   它的优点在于覆盖了 STL 没覆盖的空白，缺点在于它覆盖的那些
+   后来大多进了标准库，导致它背上越来越多的历史包袱。
+   正确的用法是：把 Boost 当成标准库的补充，按需取用其中 STL 没有的部分。
+  <<< 模块 m11_summary 结束
+
+  >>> 全部主题演示完毕。
+
+  按回车继续（q 退出）: 
+-------------------------------------------------------------------------------
+  请选择要演示的主题：
+
+    1. 字符串算法          boost::algorithm::string  vs  手写 STL      (Boost 赢)
+    2. 格式化 / 数字转换   boost::format / lexical_cast  vs  std::format (STL 赢)
+    3. 智能指针            intrusive_ptr / local_shared_ptr            (各有千秋)
+    4. 容器                multi_index / circular_buffer / bimap       (Boost 独有)
+    5. optional/variant    optional / variant2 / any                  (各有千秋)
+    6. JSON / 配置解析     property_tree                               (Boost 独有)
+    7. 正则 / 分词         boost::regex / tokenizer                    (Boost 赢)
+    8. 堆 / 容器补充       heap / flat_map / small_vector             (Boost 独有)
+    9. 错误处理 / 守卫     error_code 性能 / BOOST_SCOPE_EXIT          (各有千秋)
+   10. 日期时间            Date_Time  vs  std::chrono                  (各有千秋)
+   11. 总结               优缺点全景 + 决策指南 + 编译耗时实测
+
+    0 或直接回车 = 依次运行全部主题
+    q = 退出
+-------------------------------------------------------------------------------
+  你的选择: 
+  再见。
+

@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="源文件">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="头文件">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="源文件\演示模块">
+      <UniqueIdentifier>{a1b2c3d4-0001-4a01-9c01-000000000001}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="编译耗时基准">
+      <UniqueIdentifier>{a1b2c3d4-0002-4a02-9c02-000000000002}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="文档">
+      <UniqueIdentifier>{a1b2c3d4-0003-4a03-9c03-000000000003}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\m1_string.cpp">
+      <Filter>源文件\演示模块</Filter>
+    </ClCompile>
+    <ClCompile Include="src\m2_format.cpp">
+      <Filter>源文件\演示模块</Filter>
+    </ClCompile>
+    <ClCompile Include="src\m3_smartptr.cpp">
+      <Filter>源文件\演示模块</Filter>
+    </ClCompile>
+    <ClCompile Include="src\m4_container.cpp">
+      <Filter>源文件\演示模块</Filter>
+    </ClCompile>
+    <ClCompile Include="src\m5_optional_variant.cpp">
+      <Filter>源文件\演示模块</Filter>
+    </ClCompile>
+    <ClCompile Include="src\m6_json.cpp">
+      <Filter>源文件\演示模块</Filter>
+    </ClCompile>
+    <ClCompile Include="src\m7_regex_tokenizer.cpp">
+      <Filter>源文件\演示模块</Filter>
+    </ClCompile>
+    <ClCompile Include="src\m8_heap_flatmap.cpp">
+      <Filter>源文件\演示模块</Filter>
+    </ClCompile>
+    <ClCompile Include="src\m9_error_scope.cpp">
+      <Filter>源文件\演示模块</Filter>
+    </ClCompile>
+    <ClCompile Include="src\m10_datetime.cpp">
+      <Filter>源文件\演示模块</Filter>
+    </ClCompile>
+    <ClCompile Include="src\m11_summary.cpp">
+      <Filter>源文件\演示模块</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="demo_common.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="demo_api.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="boost.props">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="bench\compile_bench_std.cpp">
+      <Filter>编译耗时基准</Filter>
+    </None>
+    <None Include="bench\compile_bench_boost.cpp">
+      <Filter>编译耗时基准</Filter>
+    </None>
+    <None Include="README_Boost_vs_STL.md">
+      <Filter>文档</Filter>
+    </None>
+    <None Include="demo_output.txt">
+      <Filter>文档</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Project6.rc" />
+  </ItemGroup>
+</Project>
